@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+Output File/
+Country-Wise To Be Validated Files/
+paraphrase_MiniLM-L6-v2/
+~$*.xlsx
