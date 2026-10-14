@@ -24,7 +24,7 @@ from validation_checks.pipeline import (
     read_file,
     run_all_checks,
 )
-from validation_checks.report import write_report
+from validation_checks.report import ensure_writable, write_report
 from validation_checks.semantic import load_scorer
 
 logger = logging.getLogger("validation_checks")
@@ -68,18 +68,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     started = datetime.now()
     console = Console()
-    log_file = settings.output_dir / LOG_FILE.format(started)
+    log_file = settings.output_dir / LOG_FILE
     configure_logging(console, log_file=log_file, verbose=verbose)
+    logger.info("===== Run started %s =====", f"{started:%Y-%m-%d %H:%M:%S}")
     try:
         if not settings.input_dir.is_dir() or not (paths := input_files(settings.input_dir)):
             logger.error("No input files found in %s", settings.input_dir.resolve())
             return 2
+        ensure_writable(settings.output_dir)  # fail now, not after validating every file
         pipeline = build_pipeline(settings)
         reports = pipeline.run_all(paths)
         output = write_report(reports, settings.output_dir, started)
         print_summary(console, reports)
         logger.info("Results written to %s", output.resolve())
-        logger.info("Run log written to %s", log_file.resolve())
+        logger.info("Run log appended to %s", log_file.resolve())
         return 0
     except ConfigError as error:
         logger.error("%s", error)

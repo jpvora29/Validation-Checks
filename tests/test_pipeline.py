@@ -20,10 +20,12 @@ from tests.factories import (
 )
 from validation_checks.matching import build_tiers
 from validation_checks.models import (
+    CheckId,
     ConfigError,
     DataLoadError,
     FileStatus,
     RawSheet,
+    Severity,
     SheetKind,
     Style,
 )
@@ -47,8 +49,10 @@ def three_sheets() -> list[RawSheet]:
             name="1.Country Peers",
             styles={**LEGEND_STYLES, "G8": Style(fill=RED)},
         ),
-        make_sheet(
-            [*LEGEND_ROWS, LOB_HEADER, lob_row("CHUBB", ["X"])], name="2. LOB", styles=LEGEND_STYLES
+        make_sheet(  # every non-excluded carrier from Peers is in LOB, so nothing to report
+            [*LEGEND_ROWS, LOB_HEADER, *(lob_row(name, ["X"]) for name in ["CHUBB", *PEERS[1:]])],
+            name="2. LOB",
+            styles=LEGEND_STYLES,
         ),
         make_sheet(
             [*LEGEND_ROWS, PANEL_HEADER, panel_row(1, "a@x.com")],
@@ -84,13 +88,29 @@ def test_country_with_underscores() -> None:
     assert report.country == "United Kingdom"
 
 
-def test_missing_and_unknown_sheets_become_file_errors() -> None:
+def test_missing_and_unknown_sheets_are_reported_as_issues() -> None:
     sheets = [*three_sheets()[:2], make_sheet([], name="Notes")]
 
     report = pipeline_reading(sheets).run(GOOD)
 
-    assert {e.sheet for e in report.file_errors} == {SheetKind.PANEL, "Notes"}
+    problems = {(i.sheet, i.severity) for i in report.issues if i.check is CheckId.FILE_ERROR}
+    assert problems == {(SheetKind.PANEL, Severity.ERROR), ("Notes", Severity.WARNING)}
     assert report.sheets_validated == 2
+
+
+def test_carrier_missing_from_lob_is_an_issue() -> None:
+    sheets = three_sheets()
+    sheets[1] = make_sheet(
+        [*LEGEND_ROWS, LOB_HEADER, lob_row("CHUBB", ["X"])], name="2. LOB", styles=LEGEND_STYLES
+    )
+
+    report = pipeline_reading(sheets).run(GOOD)
+
+    missing = [i for i in report.issues if i.check is CheckId.CARRIER_NOT_IN_LOB]
+    assert [(i.value, i.row, i.column, i.severity) for i in missing][:1] == [
+        ("Carrier B", 8, "H8", Severity.ERROR)
+    ]
+    assert len(missing) == 5
 
 
 @pytest.mark.parametrize(
@@ -100,7 +120,7 @@ def test_unusable_files_fail_cleanly(path: str, message: str) -> None:
     report = pipeline_reading(three_sheets()).run(Path(path))
 
     assert report.status is FileStatus.FAILED
-    assert message in report.file_errors[0].message
+    assert message in report.issues[0].message
 
 
 def test_read_failure_keeps_country() -> None:

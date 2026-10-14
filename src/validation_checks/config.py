@@ -142,23 +142,26 @@ SENTENCE_MODEL_MARKERS: Final = ("modules.json", "config_sentence_transformers.j
 
 # =========================================================================== output
 
-REPORT_FILE: Final = "validation_results_{:%Y%m%d_%H%M%S}.xlsx"
-LOG_FILE: Final = "validation_run_{:%Y%m%d_%H%M%S}.log"
+RESULTS_FILE: Final = "validation_results.xlsx"  # the latest run only
+HISTORY_FILE: Final = "validation_history.xlsx"  # every earlier run, appended
+LOG_FILE: Final = "validation.log"  # appended, one separator line per run
 LOG_FILE_FORMAT: Final = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 STATUS_COLOURS: Final = {
     FileStatus.OK: "green",
     FileStatus.ISSUES: "yellow",
     FileStatus.FAILED: "red",
 }
+# Issues lists EVERYTHING to fix (checks, LOB mismatches, file/sheet problems);
+# LOB Matching and Exclusions are supporting detail. "Run At" tells runs apart in the history.
 REPORT_COLUMNS: Final = {
-    "Summary": ("File", "Country", "Status", "Errors", "Warnings", "Exclusions",
-                "LOB To Review", "File Errors"),
-    "Issues": ("File", "Country", "Sheet", "Excel Row", "Column", "Severity", "Check",
+    "Summary": ("Run At", "File", "Country", "Status", "Errors", "Warnings", "Exclusions",
+                "LOB To Review"),
+    "Issues": ("Run At", "File", "Country", "Sheet", "Excel Row", "Column", "Severity", "Check",
                "Message", "Value"),
-    "LOB Matching": ("File", "Country", "Direction", "Name", "Best Candidate", "Method",
-                     "Score", "Status", "Source Cells"),
-    "Exclusions": ("File", "Sheet", "Excel Row", "Column", "Value", "Scope", "Reason", "Colour"),
-    "File Errors": ("File", "Sheet", "Error"),
+    "LOB Matching": ("Run At", "File", "Country", "Direction", "Name", "Best Candidate",
+                     "Method", "Score", "Status", "Source Cells"),
+    "Exclusions": ("Run At", "File", "Sheet", "Excel Row", "Column", "Value", "Scope", "Reason",
+                   "Colour"),
 }  # fmt: skip
 MAX_COLUMN_WIDTH: Final = 60
 

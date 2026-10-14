@@ -2,9 +2,16 @@
 
 This tool validates every country carrier-survey workbook in `inputs/` (Country Peers, LOB Mapping and User Panel sheets). Any cell with a **red** fill, a **red** font or **strikethrough** is treated as an exclusion. That includes every shade from pink to dark red, theme colours, and conditional formatting.
 
-Each run writes two files to `output/`:
-- `validation_results_<timestamp>.xlsx`, with the sheets **Summary**, **Issues**, **LOB Matching**, **Exclusions** and **File Errors**.
-- `validation_run_<timestamp>.log`, the full run log (the same lines shown in the terminal).
+`output/` always holds just three files:
+- `validation_results.xlsx`: the **latest run**. Its sheets are:
+  - **Summary**: one row per file.
+  - **Issues**: *everything* to fix, including failed checks, carriers missing from LOB, LOB carriers not used in Peers, and missing or unreadable sheets.
+  - **LOB Matching**: matching detail.
+  - **Exclusions**: every cell or row skipped because it was red or struck through.
+- `validation_history.xlsx`: **every earlier run**. Before a run writes new results, the previous results are moved here. Each row has a **Run At** column.
+- `validation.log`: the run log, appended each run, with a `===== Run started =====` line between runs.
+
+Close both workbooks in Excel before a run. If one is open, the run stops at the start with a clear message.
 
 The agreed behaviour is described in [docs/design-decisions.md](docs/design-decisions.md).
 
@@ -13,7 +20,7 @@ The agreed behaviour is described in [docs/design-decisions.md](docs/design-deci
 | Folder | Purpose |
 |---|---|
 | `inputs/` | Survey files to validate (`<Country>_Carrier_Survey_<Year>_....xlsx`). Every file in it is processed, and one bad file never stops the others. |
-| `output/` | Results workbooks and run logs. |
+| `output/` | Latest results, history of earlier runs, and the run log. |
 | `sentence-transformers/` | The embedding model used for semantic suggestions (see its README). It's optional. |
 
 ## Setup (Python 3.11.9)

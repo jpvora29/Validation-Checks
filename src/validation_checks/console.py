@@ -36,7 +36,7 @@ def print_summary(console: Console, reports: Sequence[FileReport]) -> None:
     table.add_column("File", overflow="fold")  # wrap long file names, never cut them
     table.add_column("Country")
     table.add_column("Status")
-    for name in ("Errors", "Warnings", "Exclusions", "LOB to review", "File errors"):
+    for name in ("Errors", "Warnings", "Exclusions", "LOB to review"):
         table.add_column(name, justify="right")
     for report in reports:
         table.add_row(
@@ -47,6 +47,5 @@ def print_summary(console: Console, reports: Sequence[FileReport]) -> None:
             str(report.count(Severity.WARNING)),
             str(len(report.exclusions)),
             str(report.review_count),
-            str(len(report.file_errors)),
         )
     console.print(table)

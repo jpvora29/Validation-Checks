@@ -10,15 +10,19 @@ from validation_checks.matching import (
     build_tiers,
     load_aliases,
     match_carriers,
+    match_issue,
     normalise_name,
 )
 from validation_checks.models import (
     CarrierName,
+    CellPos,
+    CheckId,
     ConfigError,
     Direction,
     MatchMethod,
     MatchResult,
     MatchStatus,
+    Severity,
 )
 from validation_checks.semantic import EmbeddingScorer, find_model_dir
 
@@ -46,7 +50,7 @@ def test_normalise_name(raw: str, expected: str) -> None:
 
 def names(*displays: str) -> list[CarrierName]:
     return [
-        CarrierName(display=d, key=normalise_name(d, CARRIER_STOPWORDS), sources=("A1",))
+        CarrierName(display=d, key=normalise_name(d, CARRIER_STOPWORDS), sources=(CellPos(1, 1),))
         for d in displays
     ]
 
@@ -120,6 +124,38 @@ def test_unused_lob_carrier_reported_in_reverse() -> None:
     results = run(names("CHUBB"), names("CHUBB", "Sancor"))
 
     assert [(r.direction, r.name.display) for r in results] == [(Direction.LOB_TO_PEER, "Sancor")]
+
+
+def test_peer_missing_from_lob_is_an_error_issue() -> None:
+    forward = run(names("Carrier A"), names("CHUBB"))[0]
+
+    issue = match_issue(forward, peers_sheet="Peers", lob_sheet="LOB")
+
+    assert issue is not None
+    assert (issue.sheet, issue.check, issue.severity) == (
+        "Peers",
+        CheckId.CARRIER_NOT_IN_LOB,
+        Severity.ERROR,
+    )
+
+
+def test_unused_lob_carrier_is_a_warning_issue() -> None:
+    (reverse,) = run(names("CHUBB"), names("CHUBB", "Sancor"))
+
+    issue = match_issue(reverse, peers_sheet="Peers", lob_sheet="LOB")
+
+    assert issue is not None
+    assert (issue.sheet, issue.check, issue.severity) == (
+        "LOB",
+        CheckId.LOB_CARRIER_UNUSED,
+        Severity.WARNING,
+    )
+
+
+def test_confirmed_matches_are_not_issues() -> None:
+    (result,) = run(names("Zurich Argentnia"), names("Zurich Argentina"))
+
+    assert match_issue(result, peers_sheet="Peers", lob_sheet="LOB") is None
 
 
 def test_empty_lob_reports_not_found_without_candidate() -> None:

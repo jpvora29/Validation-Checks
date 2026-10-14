@@ -56,6 +56,10 @@ class CheckId(StrEnum):
     CONDITIONAL_FORMAT_NOT_EVALUATED = "Conditional format not evaluated"
     LEGEND_NOT_RED = "Exclude legend not red"
     HEADER_ROW_MARKED = "Header row styled red"
+    FILE_ERROR = "File / sheet problem"
+    CARRIER_NOT_IN_LOB = "Carrier missing from LOB"
+    LOB_CARRIER_UNUSED = "LOB carrier not in Peers"
+    POSSIBLE_CARRIER_MATCH = "Possible carrier match"
 
 
 class MarkReason(StrEnum):
@@ -401,16 +405,10 @@ class Exclusion:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class FileError:
-    sheet: str
-    message: str
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class CarrierName:
     display: str
     key: str
-    sources: tuple[str, ...]
+    sources: tuple[CellPos, ...]  # every cell the name appears in
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -441,14 +439,20 @@ class FileReport:
     issues: tuple[Issue, ...] = ()
     exclusions: tuple[Exclusion, ...] = ()
     matches: tuple[MatchResult, ...] = ()
-    file_errors: tuple[FileError, ...] = ()
     sheets_validated: int = 0
 
     @classmethod
     def failed(cls, file: str, message: str, *, country: str = "") -> Self:
-        return cls(
-            file=file, country=country, file_errors=(FileError(sheet="(file)", message=message),)
+        """A file that could not be validated at all; the reason is reported as an Issue."""
+        issue = Issue(
+            sheet="(file)",
+            row=None,
+            column="",
+            severity=Severity.ERROR,
+            check=CheckId.FILE_ERROR,
+            message=message,
         )
+        return cls(file=file, country=country, issues=(issue,))
 
     def count(self, severity: Severity) -> int:
         return sum(1 for issue in self.issues if issue.severity is severity)
@@ -461,6 +465,6 @@ class FileReport:
     def status(self) -> FileStatus:
         if self.sheets_validated == 0:
             return FileStatus.FAILED
-        if self.issues or self.file_errors or self.review_count:
+        if self.issues:
             return FileStatus.ISSUES
         return FileStatus.OK

@@ -19,14 +19,18 @@ from rapidfuzz import fuzz, process
 from validation_checks.config import ALIAS_CSV_COLUMNS, Settings
 from validation_checks.models import (
     CarrierName,
+    CellPos,
+    CheckId,
     ConfigError,
     Direction,
     Field,
     Hit,
+    Issue,
     MatchMethod,
     MatchResult,
     MatchStatus,
     ParsedSheet,
+    Severity,
     SheetKind,
 )
 
@@ -58,12 +62,12 @@ def normalise_name(name: str, stopwords: frozenset[str]) -> str:
 def carrier_names(sheet: ParsedSheet, stopwords: frozenset[str]) -> list[CarrierName]:
     """Names a sheet contributes: Peers = each carrier and all its peers; LOB = each carrier."""
     field = Field.CARRIER_NAME if sheet.kind is SheetKind.PEERS else Field.CARRIER
-    found: list[tuple[str, str]] = []  # (name, cell)
+    found: list[tuple[str, CellPos]] = []  # (name, cell)
     for record in sheet.records:
         if field in sheet.active_fields and record.get(field):
-            found.append((record.get(field), f"{sheet.fields[field].letter}{record.row}"))
+            found.append((record.get(field), CellPos(record.row, sheet.fields[field].index)))
         if sheet.kind is SheetKind.PEERS:
-            found.extend((entry.value, entry.coordinate) for entry in record.entries)
+            found.extend((e.value, CellPos(e.row, e.column.index)) for e in record.entries)
     names: dict[str, CarrierName] = {}
     for text, cell in found:
         key = normalise_name(text, stopwords)
@@ -238,3 +242,31 @@ def _first_hit(query: CarrierName, candidates: Sequence[CarrierName], tiers: Seq
         if (hit := tier(query, candidates)) is not None:
             return hit
     return Hit(candidate=None, method=MatchMethod.NONE, status=MatchStatus.NOT_FOUND, score=None)
+
+
+def match_issue(result: MatchResult, *, peers_sheet: str, lob_sheet: str) -> Issue | None:
+    """Turn a match that needs a human into an Issue, so the Issues sheet lists everything."""
+    if not result.needs_review:
+        return None
+    hit, name = result.hit, result.name.display
+    candidate = hit.candidate.display if hit.candidate else ""
+    closest = f" (closest: '{candidate}', score {hit.score})" if candidate else ""
+    if hit.status is MatchStatus.SUGGESTED:
+        check, severity = CheckId.POSSIBLE_CARRIER_MATCH, Severity.WARNING
+        message = f"'{name}' may be the same carrier as '{candidate}'; please confirm"
+    elif result.direction is Direction.PEER_TO_LOB:
+        check, severity = CheckId.CARRIER_NOT_IN_LOB, Severity.ERROR
+        message = f"'{name}' is not in the LOB sheet{closest}"
+    else:
+        check, severity = CheckId.LOB_CARRIER_UNUSED, Severity.WARNING
+        message = f"LOB carrier '{name}' is not used on the Peers sheet{closest}"
+    first = result.name.sources[0] if result.name.sources else None
+    return Issue(
+        sheet=peers_sheet if result.direction is Direction.PEER_TO_LOB else lob_sheet,
+        row=first.row if first else None,
+        column=", ".join(cell.coordinate for cell in result.name.sources),
+        severity=severity,
+        check=check,
+        message=message,
+        value=name,
+    )

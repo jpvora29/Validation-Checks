@@ -27,12 +27,12 @@ from validation_checks.config import (
     SHEET_SPECS,
     Settings,
 )
-from validation_checks.matching import Tier, carrier_names, match_carriers
+from validation_checks.matching import Tier, carrier_names, match_carriers, match_issue
 from validation_checks.models import (
+    CheckId,
     ConfigError,
     DataLoadError,
     Exclusion,
-    FileError,
     FileReport,
     Issue,
     MatchResult,
@@ -58,7 +58,6 @@ class FileContext:
     issues: tuple[Issue, ...] = ()
     exclusions: tuple[Exclusion, ...] = ()
     matches: tuple[MatchResult, ...] = ()
-    file_errors: tuple[FileError, ...] = ()
 
     def report(self) -> FileReport:
         return FileReport(
@@ -67,7 +66,6 @@ class FileContext:
             issues=self.issues,
             exclusions=self.exclusions,
             matches=self.matches,
-            file_errors=self.file_errors,
             sheets_validated=len(self.sheets),
         )
 
@@ -104,8 +102,7 @@ def parse_sheets(settings: Settings) -> Step:
     def step(context: FileContext) -> FileContext:
         sheets: dict[SheetKind, ParsedSheet] = {}
         exclusions: list[Exclusion] = []
-        warnings: list[Issue] = []
-        errors: list[FileError] = []
+        issues: list[Issue] = []
         used: set[str] = set()
         for spec in SHEET_SPECS:
             try:
@@ -113,13 +110,13 @@ def parse_sheets(settings: Settings) -> Step:
                 used.add(raw.name)
                 result = parse_sheet(raw, spec, settings)
             except SheetLayoutError as error:
-                errors.append(FileError(sheet=spec.kind, message=str(error)))
+                issues.append(_sheet_problem(spec.kind, str(error), Severity.ERROR))
                 continue
             sheets[spec.kind] = result.sheet
             exclusions.extend(result.exclusions)
-            warnings.extend(result.warnings)
-        errors.extend(
-            FileError(sheet=raw.name, message="Unrecognised sheet; it was not validated")
+            issues.extend(result.warnings)
+        issues.extend(
+            _sheet_problem(raw.name, "Unrecognised sheet; it was not validated", Severity.WARNING)
             for raw in context.raw_sheets
             if raw.name not in used
         )
@@ -127,8 +124,7 @@ def parse_sheets(settings: Settings) -> Step:
             context,
             sheets=sheets,
             exclusions=(*context.exclusions, *exclusions),
-            issues=(*context.issues, *warnings),
-            file_errors=(*context.file_errors, *errors),
+            issues=(*context.issues, *issues),
         )
 
     return step
@@ -157,9 +153,25 @@ def match_lob_carriers(settings: Settings, tiers: Sequence[Tier]) -> Step:
         matches = match_carriers(
             carrier_names(peers, settings.stopwords), carrier_names(lob, settings.stopwords), tiers
         )
-        return replace(context, matches=tuple(matches))
+        issues = [
+            issue
+            for result in matches
+            if (issue := match_issue(result, peers_sheet=peers.title, lob_sheet=lob.title))
+        ]
+        return replace(context, matches=tuple(matches), issues=(*context.issues, *issues))
 
     return step
+
+
+def _sheet_problem(sheet: str, message: str, severity: Severity) -> Issue:
+    return Issue(
+        sheet=sheet,
+        row=None,
+        column="",
+        severity=severity,
+        check=CheckId.FILE_ERROR,
+        message=message,
+    )
 
 
 # --------------------------------------------------------------------------- pipeline
