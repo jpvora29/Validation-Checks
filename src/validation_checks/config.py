@@ -138,7 +138,8 @@ CARRIER_STOPWORDS: Final = frozenset(
     }
 )  # fmt: skip
 ALIAS_CSV_COLUMNS: Final = frozenset({"alias", "canonical"})
-SENTENCE_MODEL_MARKERS: Final = ("modules.json", "config_sentence_transformers.json", "config.json")
+# Files only found at a sentence-transformers model root (config.json also sits in sub-modules).
+SENTENCE_MODEL_MARKERS: Final = ("modules.json", "config_sentence_transformers.json")
 
 # =========================================================================== output
 

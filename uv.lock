@@ -1150,12 +1150,8 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "rapidfuzz" },
     { name = "rich" },
-    { name = "typing-extensions" },
-]
-
-[package.optional-dependencies]
-semantic = [
     { name = "sentence-transformers" },
+    { name = "typing-extensions" },
 ]
 
 [package.dev-dependencies]
@@ -1173,10 +1169,9 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "rapidfuzz", specifier = ">=3.10" },
     { name = "rich", specifier = ">=13.9" },
-    { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=3.2" },
+    { name = "sentence-transformers", specifier = ">=3.2" },
     { name = "typing-extensions", specifier = ">=4.12" },
 ]
-provides-extras = ["semantic"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -228,7 +228,13 @@ def match_carriers(
         MatchResult(direction=Direction.PEER_TO_LOB, name=n, hit=_first_hit(n, lob, tiers))
         for n in peers
     ]
-    for name in lob:
+    # A LOB carrier already paired with a peer (matched or suggested) is not "unused".
+    paired = {
+        r.hit.candidate.key
+        for r in results
+        if r.hit.candidate and r.hit.status is not MatchStatus.NOT_FOUND
+    }
+    for name in (n for n in lob if n.key not in paired):
         reverse = MatchResult(
             direction=Direction.LOB_TO_PEER, name=name, hit=_first_hit(name, peers, tiers)
         )

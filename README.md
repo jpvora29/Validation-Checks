@@ -21,14 +21,13 @@ The agreed behaviour is described in [docs/design-decisions.md](docs/design-deci
 |---|---|
 | `inputs/` | Survey files to validate (`<Country>_Carrier_Survey_<Year>_....xlsx`). Every file in it is processed, and one bad file never stops the others. |
 | `output/` | Latest results, history of earlier runs, and the run log. |
-| `sentence-transformers/` | The embedding model used for semantic suggestions (see its README). It's optional. |
+| `sentence-transformers/` | Put the embedding model here. When a model is present, semantic matching is used automatically (see its README). |
 
 ## Setup (Python 3.11.9)
 
 ```bash
 uv python install 3.11.9
-uv sync                       # core: exact, alias and fuzzy carrier matching
-uv sync --extra semantic      # optional: adds sentence-transformers suggestions
+uv sync                       # installs everything, including sentence-transformers
 ```
 
 ## Run

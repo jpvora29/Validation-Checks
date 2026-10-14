@@ -41,34 +41,45 @@ def _cosine(left: list[float], right: list[float]) -> float:
 
 
 def find_model_dir(folder: Path) -> Path | None:
-    """The model folder itself, or the single model folder inside it."""
+    """The model's root folder: the shallowest folder at or under `folder` holding a
+    sentence-transformers marker file. Any depth works, e.g. a copied Hugging Face cache
+    (`models--.../snapshots/<hash>/`)."""
     if not folder.is_dir():
         return None
-    candidates = [folder, *sorted(child for child in folder.iterdir() if child.is_dir())]
-    return next(
-        (path for path in candidates if any((path / m).is_file() for m in SENTENCE_MODEL_MARKERS)),
-        None,
+    roots = sorted(
+        {marker.parent for name in SENTENCE_MODEL_MARKERS for marker in folder.rglob(name)},
+        key=lambda path: (len(path.parts), str(path)),
     )
+    if len(roots) > 1:
+        logger.warning("Several models under %s; using %s", folder.resolve(), roots[0])
+    return roots[0] if roots else None
 
 
 def load_scorer(folder: Path) -> SemanticScorer | None:
+    """Load the model if one is present; otherwise matching runs without the semantic tier."""
     model_dir = find_model_dir(folder)
     if model_dir is None:
         logger.warning(
-            "No sentence-transformers model in %s; semantic suggestions are disabled",
-            folder.resolve(),
+            "Semantic matching OFF: no sentence-transformers model found in %s", folder.resolve()
         )
         return None
+    # Imported here, not at the top: importing torch takes seconds, and is wasted without a model.
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+
     try:
-        from sentence_transformers import SentenceTransformer  # noqa: PLC0415 - optional extra
-    except ImportError:
-        logger.warning("sentence-transformers is not installed (uv sync --extra semantic)")
+        model = SentenceTransformer(str(model_dir), local_files_only=True)  # never download
+    except (OSError, ValueError, RuntimeError) as error:
+        logger.error(
+            "Semantic matching OFF: the model in %s could not be loaded: %s", model_dir, error
+        )
         return None
-    logger.info("Loading embedding model from %s", model_dir)
-    model = SentenceTransformer(str(model_dir))
+    logger.info("Semantic matching ON: using the model in %s", model_dir.resolve())
 
     def encode(texts: list[str]) -> list[list[float]]:
-        # Untyped library boundary: convert the returned array to plain floats immediately.
-        return [[float(number) for number in vector] for vector in model.encode(texts)]
+        # Library boundary: convert the returned array to plain floats immediately.
+        return [
+            [float(number) for number in vector]
+            for vector in model.encode(texts, show_progress_bar=False)
+        ]
 
     return EmbeddingScorer(encode)
