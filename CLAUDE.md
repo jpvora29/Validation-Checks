@@ -17,6 +17,7 @@ These rules apply to all Python code you write or modify in this repo. They foll
 - Code must pass `mypy --strict` (or `pyright` strict) with zero errors. Do not silence errors with a blanket `# type: ignore`. If unavoidable, use a narrow `# type: ignore[error-code]` with a one-line reason.
 - **Never use `Any`** unless interfacing with an untyped third-party library, and then isolate it at the boundary and convert to typed values immediately.
 - Use modern syntax (Python 3.11+): `list[int]`, `dict[str, int]`, `X | None`, `typing.Self`, `typing.override`, PEP 695 generics (`def f[T](x: T) -> T`) where the project's Python version allows. Add `from __future__ import annotations` only if targeting older versions.
+  - **This project is pinned to Python 3.11.9** (`.python-version`, `requires-python`). PEP 695 (`type X = ...`, `def f[T]`) and `typing.override` are 3.12+, so use `TypeAlias`, `TypeVar` and `typing_extensions.override` instead.
 - Prefer abstract collection types in parameters (`Sequence`, `Mapping`, `Iterable`) and concrete types in return values.
 - Use `Protocol` for structural interfaces, `Callable[[...], ...]` for single-method behaviours, `TypeVar`/generics for reusable containers, `Literal` and `Enum`/`StrEnum` for closed sets of values, `TypedDict` only for external dict-shaped data, `NewType` for domain primitives (`UserId`, `Currency`), `Final` for constants, `@overload` when return type depends on arguments.
 - Use `@typing.override` on every overriding method.
@@ -136,6 +137,10 @@ project/
 ```
 
 - Dependency direction: `main` → `services` → `domain`; `adapters` implement Protocols used by `services`. `domain` imports nothing from `adapters` or `services`.
+- **This project uses a flat layout instead** (decided 2026-10-14; simplicity wins). There's one module per responsibility under `src/validation_checks/`, and the dependencies still point one way:
+  `main` → `pipeline` → (`sheets`, `checks`, `matching`) → `exclusions` → `config` → `models`. `excel_reader`, `report`, `console` and `semantic` are the I/O edges.
+  - **Every constant lives in `config.py`**: paths, thresholds, regex patterns, keyword lists and output layouts.
+  - The main flow is a `PipelineBuilder` of steps (`FileContext -> FileContext`). Checks and conditional-format evaluators are **decorator registries**, filled once at import time. That's the one accepted exception to the "no module-level mutable state" rule.
 - No circular imports. If two modules need each other, extract the shared abstraction.
 - Keep modules cohesive and under roughly 300 lines. Split by responsibility, not by type (avoid a dumping-ground `utils.py`).
 

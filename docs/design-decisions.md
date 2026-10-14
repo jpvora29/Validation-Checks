@@ -42,7 +42,9 @@ Agreed during the design interview on 2026-10-14. Use this as the spec for the r
 Tiered pipeline; the first confident hit wins:
 1. Normalised exact (casefold, strip accents/punctuation, collapse whitespace, drop configurable legal/industry suffixes): **Matched**
 2. Alias CSV (`alias,canonical`, user-maintained, optional): **Matched (alias)**
-3. rapidfuzz `token_set_ratio` >= 92: **Matched (fuzzy)**
+3. rapidfuzz `token_sort_ratio` >= 0.92 (scores are reported on a 0–1 scale): **Matched (fuzzy)**.
+   *Changed during implementation:* `token_set_ratio` scores a subset as 100 (`Mapfre` vs `Mapfre Re`),
+   which would auto-match different carriers. `token_sort_ratio` still ignores word order without that flaw.
 4. Embeddings, cosine top-1 >= 0.80 and margin >= 0.05 over runner-up: **Suggested, needs review** (never auto-accepted)
 5. Otherwise: **Not in LOB**, with the best candidate and its score
 
@@ -57,8 +59,18 @@ Tiered pipeline; the first confident hit wins:
 - Cross-sheet: Country differs between sheets or from the filename (Warning).
 - File: bad filename, missing/ambiguous sheet, header not found, unreadable file.
 
+## Folders, batch runs and logging (follow-up)
+- Input folder is `inputs/`, output folder is `output/`, and the embedding model lives in `sentence-transformers/`
+  (model files directly inside, or one model folder inside). If no model is found, tier 4 is skipped with a warning.
+- Every file in `inputs/` is validated (Excel lock files `~$*` and hidden files are skipped). Each file is
+  isolated: an unexpected error is logged with its traceback and the file is reported as Failed.
+- Logging goes through rich in the terminal and to `output/validation_run_<timestamp>.log`, followed by a summary table.
+- Code structure (revised 2026-10-14): a flat package. All constants are in `config.py`. The run is a pipeline of steps
+  assembled by `PipelineBuilder`, checks and conditional-format evaluators are decorator registries, and the results
+  workbook is written by `ReportBuilder`.
+
 ## Output
-A fresh `Output File/validation_results_<YYYYMMDD_HHMMSS>.xlsx` per run (never appended). All sheets are always written, with autofilter and a frozen header:
+A fresh `output/validation_results_<YYYYMMDD_HHMMSS>.xlsx` per run (never appended). All sheets are always written, with autofilter and a frozen header:
 - **Summary**: per file, country, status, counts
 - **Issues**: `File, Country, Sheet, Excel Row, Column, Severity, Check, Message, Value`
 - **LOB Matching**: `File, Country, Direction, Name, Best Candidate, Method, Score, Status, Source cells`
@@ -72,4 +84,4 @@ One bad file never stops the run.
 - No PEP 695 syntax / `typing.override` (3.12+): use `TypeAlias`, `TypeVar`, `typing_extensions.override`.
 - No pandas. Runtime: openpyxl, pydantic, pydantic-settings, rapidfuzz; `[semantic]`: sentence-transformers, numpy.
 - Dev: ruff, mypy --strict, pytest. Tests build fixture workbooks in code and also use the Argentina sample.
-- Layout: `src/validation_checks/{domain,services,adapters,config.py,__main__.py}`; run with `python -m validation_checks`.
+- Layout: flat `src/validation_checks/` (see README); run with `python -m validation_checks`.

@@ -5,7 +5,21 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 *.egg-info/
-Output File/
-Country-Wise To Be Validated Files/
-paraphrase_MiniLM-L6-v2/
 ~$*.xlsx
+
+# Run outputs
+output/
+
+# Real survey files stay local; only the reference sample is tracked.
+inputs/*
+inputs/Argentina_Carrier_Survey_2027_Validation.xlsx
+
+# Model weights are large; keep only the instructions.
+sentence-transformers/*
+!sentence-transformers/README.md
+
+# Claude files are large; keep only the instructions.
+CLAUDE.md
+
+# Design docs are large; keep only the instructions.
+docs/*
