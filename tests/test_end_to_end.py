@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from tests.factories import (
     SETTINGS,
@@ -84,6 +84,43 @@ def test_latest_results_and_history(tmp_path: Path) -> None:
     assert load_workbook(latest).sheetnames == ["Summary", "Issues", "LOB Matching", "Exclusions"]
     assert run_rows(latest, "Issues") == runs[2:]  # latest run only
     assert run_rows(history, "Issues") == runs[:2]  # every earlier run, in order
+
+
+def test_exclusions_sheet_shows_the_country(tmp_path: Path, pipeline: Pipeline) -> None:
+    workbook = survey_workbook(peers=[peers_row("CHUBB", PEERS)], lob=[], panel=[])
+    workbook["1.Country Peers"]["G8"].font = red_font()
+    report = pipeline.run(save(workbook, tmp_path / "Chile_Carrier_Survey_2027.xlsx"))
+
+    path = write_report([report], tmp_path / "out", datetime(2026, 10, 1))
+
+    rows = list(load_workbook(path)["Exclusions"].iter_rows(values_only=True))
+    assert rows[0][1:4] == ("File", "Country", "Sheet")
+    assert rows[1][1:4] == ("Chile_Carrier_Survey_2027.xlsx", "Chile", "1.Country Peers")
+
+
+def test_history_with_older_columns_is_realigned(tmp_path: Path) -> None:
+    history = Workbook()
+    old = history.worksheets[0]
+    old.title = "Exclusions"
+    old.append(
+        ["Run At", "File", "Sheet", "Excel Row", "Column", "Value", "Scope", "Reason", "Colour"]
+    )
+    old.append([datetime(2026, 9, 1), "Old.xlsx", "1.Country Peers", 8, "Peer 1", "Carrier A",
+                "Cell", "red fill", "FF0000"])  # fmt: skip
+    history.save(tmp_path / "validation_history.xlsx")
+    write_report(
+        [FileReport.failed("a.xlsx", "x", country="Peru")], tmp_path, datetime(2026, 10, 1)
+    )
+    write_report([FileReport.failed("b.xlsx", "x")], tmp_path, datetime(2026, 10, 2))
+
+    rows = list(
+        load_workbook(tmp_path / "validation_history.xlsx")["Exclusions"].iter_rows(
+            values_only=True
+        )
+    )
+
+    assert rows[0][1:4] == ("File", "Country", "Sheet")
+    assert rows[1][1:5] == ("Old.xlsx", None, "1.Country Peers", 8)  # old row, Country blank
 
 
 def test_open_results_file_stops_before_anything_is_archived(tmp_path: Path) -> None:

@@ -16,6 +16,7 @@ from typing import Self, TypeAlias
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
 from validation_checks.config import HISTORY_FILE, MAX_COLUMN_WIDTH, REPORT_COLUMNS, RESULTS_FILE
 from validation_checks.models import ConfigError, FileReport, Severity
@@ -38,9 +39,11 @@ class ReportBuilder:
     def add_sheet(self, title: str, rows: Iterable[Row]) -> Self:
         headers = REPORT_COLUMNS[title]
         if title in self._workbook.sheetnames:
-            sheet = self._workbook[title]
+            sheet = self._sheet(title)
+            if [cell.value for cell in sheet[1]] != list(headers):
+                sheet = self._migrate(title, headers)
         else:
-            sheet = self._workbook.create_sheet(title)
+            sheet = self._new_sheet(title)
             sheet.append(list(headers))
         widths = [len(header) for header in headers]
         for row in rows:
@@ -56,6 +59,32 @@ class ReportBuilder:
         for cell in sheet["A"][1:]:
             cell.number_format = "yyyy-mm-dd hh:mm:ss"  # the Run At column
         return self
+
+    def _migrate(self, title: str, headers: Sequence[str]) -> Worksheet:
+        """Rewrite an older sheet under the current columns (matched by header name), so rows
+        written before a column was added stay aligned; the new column is left blank for them."""
+        old = self._sheet(title)
+        rows = list(old.iter_rows(values_only=True))
+        old_headers = [str(header) for header in rows[0]]
+        index = self._workbook.index(old)
+        self._workbook.remove(old)
+        sheet = self._new_sheet(title, index)
+        sheet.append(list(headers))
+        for row in rows[1:]:
+            values = dict(zip(old_headers, row, strict=False))
+            sheet.append([_plain(values.get(header)) for header in headers])
+        logger.info("History sheet '%s' updated to the current columns", title)
+        return sheet
+
+    def _sheet(self, title: str) -> Worksheet:
+        sheet = self._workbook[title]
+        if not isinstance(sheet, Worksheet):
+            raise ConfigError(f"'{title}' in the results workbook is not a worksheet")
+        return sheet
+
+    def _new_sheet(self, title: str, index: int | None = None) -> Worksheet:
+        sheet: Worksheet = self._workbook.create_sheet(title, index)
+        return sheet
 
     def save(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,4 +178,5 @@ def _matches(reports: Sequence[FileReport], run_at: datetime) -> Iterable[Row]:
 def _exclusions(reports: Sequence[FileReport], run_at: datetime) -> Iterable[Row]:
     for r in reports:
         for e in r.exclusions:
-            yield (run_at, r.file, e.sheet, e.row, e.column, e.value, e.scope, e.reason, e.colour)
+            yield (run_at, r.file, r.country, e.sheet, e.row, e.column, e.value, e.scope,
+                   e.reason, e.colour)  # fmt: skip

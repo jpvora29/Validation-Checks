@@ -160,8 +160,8 @@ REPORT_COLUMNS: Final = {
                "Message", "Value"),
     "LOB Matching": ("Run At", "File", "Country", "Direction", "Name", "Best Candidate",
                      "Method", "Score", "Status", "Source Cells"),
-    "Exclusions": ("Run At", "File", "Sheet", "Excel Row", "Column", "Value", "Scope", "Reason",
-                   "Colour"),
+    "Exclusions": ("Run At", "File", "Country", "Sheet", "Excel Row", "Column", "Value", "Scope",
+                   "Reason", "Colour"),
 }  # fmt: skip
 MAX_COLUMN_WIDTH: Final = 60
 
